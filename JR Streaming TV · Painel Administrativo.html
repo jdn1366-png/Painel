@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JR Streaming TV · Painel</title>
+<style>
+:root{--bg:#0b0b0c;--card:#17171a;--card2:#1f1f23;--red:#e50914;--tx:#f4f4f5;--mu:#9a9aa3;--ok:#22c55e;--wa:#f59e0b;--bd:#2a2a30;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+.app{display:flex;min-height:100vh}
+nav{width:220px;background:#111113;border-right:1px solid var(--bd);padding:16px 10px;flex:none}
+.logo{font-weight:800;font-size:18px;padding:4px 10px 16px}.logo b{color:var(--red)}
+nav button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--mu);padding:10px 12px;border-radius:10px;font:inherit;cursor:pointer;transition:.2s}
+nav button:hover,nav button.on{background:var(--card2);color:var(--tx)}nav button.on{box-shadow:inset 3px 0 var(--red)}
+main{flex:1;padding:20px;min-width:0;max-width:1100px}
+h1{font-size:22px;margin:0 0 16px}h3{margin:0 0 10px;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:12px}
+.grid .card{margin:0}.k{color:var(--mu);font-size:12px}.v{font-size:22px;font-weight:700;margin-top:4px}
+button.b,a.b{background:var(--red);color:#fff;border:0;border-radius:10px;padding:8px 12px;font:inherit;cursor:pointer;text-decoration:none;display:inline-block;transition:.2s}
+button.b:hover,a.b:hover{filter:brightness(1.15)}button.g,a.g{background:var(--card2);border:1px solid var(--bd);color:var(--tx)}a.w{background:#128c4a}
+input,select,textarea{width:100%;background:var(--card2);border:1px solid var(--bd);color:var(--tx);border-radius:10px;padding:9px;font:inherit}
+label{display:block;color:var(--mu);font-size:12px;margin:8px 0 3px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>*{flex:1;min-width:130px}.row>.n{flex:none;min-width:0}
+.tbl{overflow-x:auto}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px 6px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-size:12px;font-weight:500}
+.tag{padding:2px 8px;border-radius:99px;font-size:12px;background:var(--card2)}
+.t-ok{color:var(--ok)}.t-late{color:var(--red)}.t-soon{color:var(--wa)}
+dialog{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:18px;width:min(520px,94vw);max-height:90vh}dialog::backdrop{background:#000a}
+.bar{height:8px;background:var(--red);border-radius:4px}
+#msg{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--bd);padding:10px 16px;border-radius:12px;display:none;z-index:9}
+@media(max-width:800px){.app{display:block}nav{width:auto;display:flex;overflow-x:auto;gap:4px;padding:8px;border-right:0;border-bottom:1px solid var(--bd);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}.logo{display:none}nav button{white-space:nowrap;width:auto}main{padding:14px}}
+</style></head><body>
+<div class="app"><nav id="nav"></nav><main id="main"><p>Carregando…</p></main></div>
+<div id="msg"></div><dialog id="dlg"></dialog>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const R=n=>Number(n||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const pad=n=>String(n).padStart(2,"0");
+const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const pd=s=>{const[a,b,c]=s.split("-").map(Number);return new Date(a,b-1,c)};
+const br=s=>s?s.split("-").reverse().join("/"):"—";
+const TODAY=iso(new Date());
+function addM(s,n){const[y,m,d]=s.split("-").map(Number);const t=new Date(y,m-1+n,1);const l=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();t.setDate(Math.min(d,l));return iso(t)}
+const diff=s=>Math.round((pd(s)-pd(TODAY))/864e5);
+const DEF_PLANS=[{id:"mensal",nome:"Mensal",valor:34.9,meses:1,promo:""},{id:"trimestral",nome:"Trimestral",valor:100,meses:3,promo:"1 mês grátis"},{id:"semestral",nome:"Semestral",valor:200,meses:6,promo:"2 meses grátis"},{id:"anual",nome:"Anual",valor:300,meses:12,promo:"2 meses grátis e R$ 120,00 de desconto"}];
+const DEF_CFG={empresa:"JR STREAMING TV",antes:3,depois:2,
+m1:"Olá, [NOME]! Tudo bem?\n\nPassando para lembrar que sua assinatura JR Streaming TV vence no dia [DATA].\n\nPara continuar aproveitando nosso serviço sem interrupções, não esqueça de realizar sua renovação.",
+m2:"Olá, [NOME]!\n\nSua assinatura JR Streaming TV vence hoje.\n\nValor da renovação: [VALOR].\n\nApós realizar o PIX, envie o comprovante pelo WhatsApp para confirmarmos seu pagamento.",
+m3:"Olá, [NOME]!\n\nIdentificamos que sua assinatura JR Streaming TV está com o pagamento pendente.\n\nCaso já tenha realizado o pagamento, envie o comprovante para conferência.\n\nObrigado pela preferência!"};
+let db,dl,clients=[],plans=DEF_PLANS,cfg=DEF_CFG,view="dash",filt="all",q="",fi="",ff="";
+const MENU=[["dash","Dashboard"],["cli","Clientes"],["novo","Cadastrar cliente"],["venc","Vencimentos"],["pag","Pagamentos"],["wa","Cobranças WhatsApp"],["fin","Financeiro"],["rel","Relatórios"],["pl","Planos e promoções"],["cfg","Configurações"]];
+function toast(t){const m=$("#msg");m.textContent=t;m.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>m.style.display="none",2800)}
+const plan=id=>plans.find(p=>p.id===id)||{nome:"?",meses:1,valor:0};
+const prox=c=>addM(c.orig,c.av||0);
+function fstat(c){if(c.cancelado)return["Cancelado",""];const d=diff(prox(c));return d<0?["Atrasado","t-late"]:d<=cfg.antes?["Próximo do vencimento","t-soon"]:["Em dia","t-ok"]}
+const pays=()=>clients.flatMap(c=>(c.pag||[]).map(p=>({...p,nome:c.nome,cid:c.id})));
+const sum=a=>a.reduce((s,p)=>s+Number(p.valor||0),0);
+const hist=(c,t)=>{c.hist=[...(c.hist||[]),{d:new Date().toISOString(),t}]};
+async function save(c){try{await db.collection("clients").doc(c.id).set(c)}catch(e){toast("Erro ao salvar: "+(e.message||e.code))}}
+async function saveSet(k,v){try{await db.doc("settings/"+k).set(v);toast("Salvo")}catch(e){toast("Erro ao salvar")}}
+function render(){
+ $("#nav").innerHTML='<div class="logo">JR <b>STREAMING</b> TV</div>'+MENU.map(m=>`<button class="${view===m[0]?"on":""}" onclick="go('${m[0]}')">${m[1]}</button>`).join("")+'<button onclick="sair()">Sair</button>';
+ const V={dash:vDash,cli:vCli,novo:()=>{openForm();view="cli";return vCli()},venc:vVenc,pag:vPag,wa:vWa,fin:vFin,rel:vRel,pl:vPl,cfg:vCfg}[view];
+ const keep=document.activeElement&&document.activeElement.id;
+ $("#main").innerHTML=V();
+ if(keep&&$("#"+keep)){const e=$("#"+keep);e.focus();try{e.setSelectionRange(e.value.length,e.value.length)}catch(x){}}
+}
+function go(v){view=v;render()}
+function sair(){toast("O acesso é controlado pelo login do claude.ai. Para sair, feche esta aba ou saia da sua conta.")}
+function card(k,v,c=""){return`<div class="card"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`}
+function vDash(){
+ const act=clients.filter(c=>!c.cancelado),mo=TODAY.slice(0,7),P=pays();
+ const rec=sum(P.filter(p=>p.data.startsWith(mo))),fim=iso(new Date(+mo.slice(0,4),+mo.slice(5,7),0));
+ const prev=sum(act.filter(c=>prox(c)<=fim).map(c=>({valor:c.valor})));
+ const months=[...Array(6)].map((_,i)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-5+i);const k=iso(d).slice(0,7);return[k,sum(P.filter(p=>p.data.startsWith(k)))]});
+ const mx=Math.max(1,...months.map(m=>m[1]));
+ const svg=`<svg viewBox="0 0 300 130" width="100%">${months.map((m,i)=>{const h=m[1]/mx*90;return`<rect x="${i*50+8}" y="${100-h}" width="34" height="${h}" rx="5" fill="#e50914"/><text x="${i*50+25}" y="118" fill="#9a9aa3" font-size="10" text-anchor="middle">${m[0].slice(5)}/${m[0].slice(2,4)}</text><text x="${i*50+25}" y="${96-h}" fill="#f4f4f5" font-size="9" text-anchor="middle">${m[1]?Math.round(m[1]):""}</text>`}).join("")}</svg>`;
+ const dist=plans.map(p=>[p.nome,act.filter(c=>c.planId===p.id).length]);const dm=Math.max(1,...dist.map(d=>d[1]));
+ return`<h1>Dashboard</h1><div class="grid">${card("Clientes cadastrados",clients.length)}${card("Clientes ativos",act.filter(c=>!c.bloqueado).length)}${card("Próximos do vencimento",act.filter(c=>{const d=diff(prox(c));return d>=0&&d<=cfg.antes}).length,"t-soon")}${card("Atrasados",act.filter(c=>diff(prox(c))<0).length,"t-late")}${card("Pagamentos a confirmar",act.filter(c=>c.pendente).length)}${card("Recebido no mês",R(rec),"t-ok")}${card("Previsto a receber",R(prev))}${card("Bloqueados",clients.filter(c=>c.bloqueado&&!c.cancelado).length)}</div>
+ <div class="card"><h3>Faturamento mensal (R$)</h3>${svg}</div><div class="card"><h3>Distribuição dos planos</h3>${dist.map(d=>`<div style="margin:8px 0"><div class="row"><span>${esc(d[0])}</span><span class="n">${d[1]}</span></div><div class="bar" style="width:${d[1]/dm*100}%"></div></div>`).join("")}</div>`}
+function list(arr,extra){return`<div class="tbl"><table><tr><th>Nome</th><th>WhatsApp</th><th>Plano</th><th>Vencimento</th><th>Financeiro</th><th>Acesso</th><th></th></tr>${arr.map(c=>{const s=fstat(c);return`<tr><td>${esc(c.nome)}</td><td>${esc(c.whats)}</td><td>${esc(plan(c.planId).nome)}</td><td>${br(prox(c))}</td><td class="${s[1]}">${s[0]}${c.pendente?' <span class="tag">comprovante</span>':""}</td><td>${c.cancelado?"—":c.bloqueado?"Bloqueado":"Liberado"}</td><td><button class="b g" onclick="openCli('${c.id}')">Abrir</button> ${extra?extra(c):""}</td></tr>`}).join("")||'<tr><td colspan="7">Nenhum registro.</td></tr>'}</table></div>`}
+function vCli(){
+ const F={all:"Todos",ativo:"Ativos",prox:"Próximos",atr:"Atrasados",blo:"Bloqueados",can:"Cancelados"};
+ let a=clients.filter(c=>{const d=diff(prox(c));return{all:1,ativo:!c.cancelado&&!c.bloqueado,prox:!c.cancelado&&d>=0&&d<=cfg.antes,atr:!c.cancelado&&d<0,blo:c.bloqueado&&!c.cancelado,can:c.cancelado}[filt]});
+ const t=q.toLowerCase(),dg=q.replace(/\D/g,"");
+ if(q)a=a.filter(c=>c.nome.toLowerCase().includes(t)||(dg&&(c.whats||"").replace(/\D/g,"").includes(dg)));
+ a.sort((x,y)=>x.nome.localeCompare(y.nome));
+ return`<h1>Clientes</h1><div class="row" style="margin-bottom:12px"><input id="q" placeholder="Buscar por nome ou telefone" value="${esc(q)}" oninput="q=this.value;render()"><select onchange="filt=this.value;render()">${Object.entries(F).map(([k,v])=>`<option value="${k}" ${filt===k?"selected":""}>${v}</option>`).join("")}</select><button class="b n" onclick="openForm()">+ Cadastrar</button></div><div class="card">${list(a)}</div>`}
+function vVenc(){const a=clients.filter(c=>!c.cancelado).sort((x,y)=>prox(x).localeCompare(prox(y)));return`<h1>Vencimentos</h1><div class="card">${list(a,c=>`<button class="b n" onclick="openPay('${c.id}')">Confirmar</button>`)}</div>`}
+function vPag(){const pend=clients.filter(c=>c.pendente&&!c.cancelado);const P=pays().sort((a,b)=>b.data.localeCompare(a.data)).slice(0,50);
+ return`<h1>Pagamentos</h1><div class="card"><h3>Comprovantes aguardando conferência</h3><p class="k">Marque “comprovante recebido” na ficha do cliente. O pagamento só conta após você confirmar.</p>${list(pend,c=>`<button class="b n" onclick="openPay('${c.id}')">CONFIRMAR PAGAMENTO</button>`)}</div><div class="card"><h3>Últimos pagamentos confirmados</h3><div class="tbl"><table><tr><th>Data</th><th>Cliente</th><th>Plano</th><th>Valor</th></tr>${P.map(p=>`<tr><td>${br(p.data)}</td><td>${esc(p.nome)}</td><td>${esc(p.plano)}</td><td>${R(p.valor)}</td></tr>`).join("")||'<tr><td colspan="4">Nenhum pagamento.</td></tr>'}</table></div></div>`}
+function msgFor(c,k){const t=cfg["m"+k].replace(/\[NOME\]/g,c.nome.split(" ")[0]).replace(/\[DATA\]/g,br(prox(c))).replace(/\[VALOR\]/g,R(c.valor));return t}
+function waLink(c,k){const n=(c.whats||"").replace(/\D/g,"");return"https://wa.me/"+(n.length<=11?"55"+n:n)+"?text="+encodeURIComponent(msgFor(c,k))}
+function vWa(){const a=clients.filter(c=>!c.cancelado).map(c=>{const d=diff(prox(c));return{c,k:d===cfg.antes?1:d===0?2:d<=-cfg.depois?3:0}}).filter(x=>x.k);const L={1:"Lembrete antecipado",2:"Vence hoje",3:"Pendente após vencimento"};
+ return`<h1>Cobranças WhatsApp</h1><p class="k">Lembretes de hoje: ${cfg.antes} dias antes, no vencimento e ${cfg.depois} dias depois. O envio é feito por você, com a mensagem já preenchida. Envio 100% automático exige a API oficial do WhatsApp Business (ainda não conectada).</p><div class="card">${a.map(x=>`<div class="row" style="padding:8px 0;border-bottom:1px solid var(--bd)"><span>${esc(x.c.nome)}<br><span class="k">${L[x.k]} · ${br(prox(x.c))}</span></span><a class="b w n" target="_blank" rel="noopener" href="${waLink(x.c,x.k)}">Abrir WhatsApp</a></div>`).join("")||"<p>Nenhum lembrete para hoje.</p>"}</div>`}
+function vFin(){const P=pays(),f=P.filter(p=>(!fi||p.data>=fi)&&(!ff||p.data<=ff)).sort((a,b)=>b.data.localeCompare(a.data));
+ const w=iso(new Date(Date.now()-6*864e5)),act=clients.filter(c=>!c.cancelado);const pl={};f.forEach(p=>pl[p.plano]=(pl[p.plano]||0)+Number(p.valor));
+ return`<h1>Financeiro</h1><div class="grid">${card("Hoje",R(sum(P.filter(p=>p.data===TODAY))))}${card("Últimos 7 dias",R(sum(P.filter(p=>p.data>=w))))}${card("Mês",R(sum(P.filter(p=>p.data.startsWith(TODAY.slice(0,7))))))}${card("Ano",R(sum(P.filter(p=>p.data.startsWith(TODAY.slice(0,4))))))}${card("Total recebido",R(sum(P)),"t-ok")}${card("Valores atrasados",R(sum(act.filter(c=>diff(prox(c))<0).map(c=>({valor:c.valor})))),"t-late")}${card("A vencer",R(sum(act.filter(c=>diff(prox(c))>=0).map(c=>({valor:c.valor})))))}</div>
+ <div class="card row"><div><label>De</label><input type="date" value="${fi}" onchange="fi=this.value;render()"></div><div><label>Até</label><input type="date" value="${ff}" onchange="ff=this.value;render()"></div></div>
+ <div class="card"><h3>Receita por plano (período)</h3>${Object.entries(pl).map(([k,v])=>`<div class="row"><span>${esc(k)}</span><b class="n">${R(v)}</b></div>`).join("")||"—"}</div>
+ <div class="card"><h3>Histórico (${f.length})</h3><div class="tbl"><table><tr><th>Data</th><th>Cliente</th><th>Plano</th><th>Valor</th></tr>${f.map(p=>`<tr><td>${br(p.data)}</td><td>${esc(p.nome)}</td><td>${esc(p.plano)}</td><td>${R(p.valor)}</td></tr>`).join("")}</table></div></div>`}
+function vRel(){return`<h1>Relatórios e backup</h1><div class="card"><h3>Exportar</h3><p class="k">CSV abre direto no Excel. PDF: use “imprimir” do navegador na tela Financeiro.</p><div class="row"><button class="b g" onclick="expCsv('pag')">Pagamentos (CSV)</button><button class="b g" onclick="expCsv('cli')">Clientes (CSV)</button></div></div><div class="card"><h3>Backup e recuperação</h3><div class="row"><button class="b" onclick="bkp()">Baixar backup (JSON)</button><input type="file" accept=".json" onchange="rest(this.files[0])"></div><p class="k">Restaurar importa os clientes e configurações do arquivo, sobrescrevendo registros com o mesmo ID.</p></div>`}
+function vPl(){return`<h1>Planos e promoções</h1><div class="card">${plans.map((p,i)=>`<div class="row" style="margin-bottom:10px"><input value="${esc(p.nome)}" onchange="pe(${i},'nome',this.value)"><input type="number" step="0.01" value="${p.valor}" onchange="pe(${i},'valor',+this.value)"><input type="number" value="${p.meses}" title="Meses do ciclo" onchange="pe(${i},'meses',+this.value)"><input value="${esc(p.promo)}" placeholder="Promoção" onchange="pe(${i},'promo',this.value)"><button class="b g n" onclick="pdel(${i})">Remover</button></div>`).join("")}<div class="row"><button class="b g" onclick="padd()">+ Plano</button><button class="b" onclick="saveSet('plans',{list:plans})">Salvar planos</button></div><p class="k">Colunas: nome, valor, meses do ciclo, promoção. Remover um plano não altera clientes já cadastrados.</p></div>`}
+function pe(i,k,v){plans[i][k]=v}function padd(){plans.push({id:"p"+Date.now(),nome:"Novo",valor:0,meses:1,promo:""});render()}function pdel(i){plans.splice(i,1);render()}
+function vCfg(){return`<h1>Configurações</h1><div class="card"><label>Empresa</label><input id="c0" value="${esc(cfg.empresa)}"><div class="row"><div><label>Lembrete: dias antes</label><input id="c1" type="number" value="${cfg.antes}"></div><div><label>Cobrança: dias depois</label><input id="c2" type="number" value="${cfg.depois}"></div></div>${[1,2,3].map(k=>`<label>Mensagem ${k===1?"antecipada":k===2?"no vencimento":"após vencimento"} ([NOME], [DATA], [VALOR])</label><textarea id="m${k}" rows="5">${esc(cfg["m"+k])}</textarea>`).join("")}<br><button class="b" onclick="saveCfg()">Salvar configurações</button></div><div class="card"><h3>Usuários e permissões</h3><p class="k">O login e o controle de acesso são feitos pelo compartilhamento deste painel no claude.ai: só quem você convidar como Editor entra e altera dados. Gerencie em Compartilhar.</p></div>`}
+function saveCfg(){cfg={...cfg,empresa:$("#c0").value,antes:+$("#c1").value||3,depois:+$("#c2").value||2,m1:$("#m1").value,m2:$("#m2").value,m3:$("#m3").value};saveSet("config",cfg)}
+function openD(h){dl.innerHTML=h;dl.showModal()}
+function openForm(id){const c=clients.find(x=>x.id===id)||{};
+ openD(`<h3>${id?"Editar":"Cadastrar"} cliente</h3><label>Nome completo</label><input id="f1" value="${esc(c.nome)}"><label>WhatsApp (com DDD)</label><input id="f2" inputmode="tel" value="${esc(c.whats)}"><label>Plano</label><select id="f3" onchange="$('#f4').value=plan(this.value).valor">${plans.map(p=>`<option value="${p.id}" ${c.planId===p.id?"selected":""}>${esc(p.nome)}</option>`).join("")}</select><label>Valor (R$)</label><input id="f4" type="number" step="0.01" value="${c.valor??plans[0].valor}"><div class="row"><div><label>Data de início</label><input id="f5" type="date" value="${c.inicio||TODAY}"></div><div><label>Vencimento original</label><input id="f6" type="date" value="${c.orig||TODAY}" ${id&&c.pag?.length?"disabled":""}></div></div><label>Observações</label><textarea id="f7">${esc(c.obs)}</textarea><div class="row" style="margin-top:12px"><button class="b" onclick="saveCli('${id||""}')">Salvar</button><button class="b g" onclick="dlg.close()">Fechar</button></div>`)}
+async function saveCli(id){const n=$("#f1").value.trim(),w=$("#f2").value.replace(/\D/g,""),v=+$("#f4").value;
+ if(n.length<3||w.length<10||!(v>0)||!$("#f6").value)return toast("Preencha nome, WhatsApp válido, valor e vencimento.");
+ let c=clients.find(x=>x.id===id);const nw=!c;if(nw){c={id:db.collection("clients").doc().id,av:0,pag:[],hist:[],criado:TODAY};hist(c,"Cliente cadastrado")}else hist(c,"Cadastro alterado");
+ Object.assign(c,{nome:n,whats:w,planId:$("#f3").value,valor:v,inicio:$("#f5").value,orig:$("#f6").value,obs:$("#f7").value});
+ if(nw)hist(c,"Plano contratado: "+plan(c.planId).nome);
+ await save(c);dlg.close();toast("Cliente salvo")}
+function openCli(id){const c=clients.find(x=>x.id===id);if(!c)return;const s=fstat(c);
+ openD(`<h3>${esc(c.nome)}</h3><p class="k">${esc(c.whats)} · ${esc(plan(c.planId).nome)} · ${R(c.valor)}<br>Vencimento original: dia ${c.orig.slice(8)} · Próximo: ${br(prox(c))}<br>Financeiro: <span class="${s[1]}">${s[0]}</span> · Acesso: ${c.cancelado?"cancelado":c.bloqueado?"Bloqueado":"Liberado"}<br>${esc(c.obs)}</p><div class="row">${c.cancelado?"":`<button class="b n" onclick="openPay('${id}')">CONFIRMAR PAGAMENTO</button><button class="b g n" onclick="tog('${id}','pendente')">${c.pendente?"Limpar comprovante":"Comprovante recebido"}</button><button class="b g n" onclick="tog('${id}','bloqueado')">${c.bloqueado?"DESBLOQUEAR CLIENTE":"BLOQUEAR CLIENTE"}</button><button class="b g n" onclick="openForm('${id}')">Editar</button><a class="b w n" target="_blank" rel="noopener" href="${waLink(c,diff(prox(c))<0?3:diff(prox(c))===0?2:1)}">WhatsApp</a><button class="b g n" onclick="cancelCli('${id}')">Cancelar cliente</button>`}</div><h3 style="margin-top:14px">Histórico</h3><div style="max-height:240px;overflow:auto">${[...(c.hist||[])].reverse().map(h=>`<div class="k" style="padding:4px 0;border-bottom:1px solid var(--bd)">${new Date(h.d).toLocaleString("pt-BR")} · ${esc(h.t)}</div>`).join("")}</div><br><button class="b g" onclick="dlg.close()">Fechar</button>`)}
+async function tog(id,k){const c=clients.find(x=>x.id===id);c[k]=!c[k];if(k==="bloqueado")hist(c,c[k]?"Cliente BLOQUEADO (manual)":"Cliente DESBLOQUEADO (manual)");else hist(c,c[k]?"Comprovante recebido, aguardando conferência":"Comprovante limpo");await save(c);openCli(id)}
+async function cancelCli(id){if(!confirm("Cancelar este cliente? O histórico financeiro é mantido."))return;const c=clients.find(x=>x.id===id);c.cancelado=true;hist(c,"Cliente cancelado");await save(c);dlg.close()}
+function openPay(id){const c=clients.find(x=>x.id===id);openD(`<h3>Confirmar pagamento · ${esc(c.nome)}</h3><label>Plano</label><select id="p1" onchange="$('#p2').value=plan(this.value).valor">${plans.map(p=>`<option value="${p.id}" ${c.planId===p.id?"selected":""}>${esc(p.nome)} · ${R(p.valor)}</option>`).join("")}</select><label>Valor recebido (R$)</label><input id="p2" type="number" step="0.01" value="${c.valor}"><label>Data real do recebimento</label><input id="p3" type="date" value="${TODAY}"><p class="k">Vencimento atual: ${br(prox(c))}. O próximo ciclo mantém o dia ${c.orig.slice(8)}, mesmo com pagamento atrasado.</p><div class="row"><button class="b" onclick="confirmPay('${id}')">CONFIRMAR PAGAMENTO</button><button class="b g" onclick="dlg.close()">Fechar</button></div>`)}
+async function confirmPay(id){const c=clients.find(x=>x.id===id),p=plan($("#p1").value),v=+$("#p2").value,d=$("#p3").value;if(!(v>0)||!d)return toast("Informe valor e data.");
+ const antes=prox(c);c.av=(c.av||0)+p.meses;c.planId=$("#p1").value;c.pendente=false;c.pag=[...(c.pag||[]),{data:d,valor:v,plano:p.nome,venc:antes}];
+ hist(c,`Pagamento ${R(v)} recebido em ${br(d)} (vencimento ${br(antes)}${d>antes?", pago com atraso":""}). Próximo vencimento: ${br(prox(c))}`);await save(c);dlg.close();toast("Pagamento confirmado")}
+async function out(name,data){try{await dl.save({filename:name,data});}catch(e){toast("Download não concluído")}}
+function csv(rows){return"\ufeff"+rows.map(r=>r.map(x=>'"'+String(x??"").replace(/"/g,'""')+'"').join(";")).join("\n")}
+function expCsv(k){const a=k==="pag"?[["Data","Cliente","Plano","Valor"],...pays().map(p=>[br(p.data),p.nome,p.plano,p.valor])]:[["Nome","WhatsApp","Plano","Valor","Próx. vencimento","Situação"],...clients.map(c=>[c.nome,c.whats,plan(c.planId).nome,c.valor,br(prox(c)),fstat(c)[0]])];out("jr-"+k+".csv",csv(a))}
+function bkp(){out("jr-backup-"+TODAY+".json",JSON.stringify({clients,plans,cfg}))}
+async function rest(f){if(!f)return;try{const j=JSON.parse(await f.text());for(const c of j.clients||[])await save(c);if(j.plans)await saveSet("plans",{list:j.plans});if(j.cfg)await saveSet("config",j.cfg);toast("Backup restaurado")}catch(e){toast("Arquivo inválido")}}
+(async()=>{
+ try{dl=await claude.use("downloads")}catch(e){}
+ dl=dl||{save:async()=>{toast("Download indisponível aqui")}};
+ try{db=await claude.use("db")}catch(e){}
+ if(!db){$("#main").innerHTML="<h1>Acesso indisponível</h1><p>Abra este painel pelo link do claude.ai com sua conta autorizada.</p>";return}
+ const t=setTimeout(()=>toast("Dados ainda não alcançados. Verifique a conexão."),10000);
+ db.collection("clients").onSnapshot(s=>{clearTimeout(t);clients=s.docs.map(d=>({...d.data(),id:d.id}));render()},e=>toast("Erro ao ler dados"));
+ db.doc("settings/plans").onSnapshot(s=>{const d=s.exists?s.data():null;if(d&&d.list)plans=d.list;render()});
+ db.doc("settings/config").onSnapshot(s=>{const d=s.exists?s.data():null;if(d)cfg={...DEF_CFG,...d};render()});
+})();
+</script></body></html>
